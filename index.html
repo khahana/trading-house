@@ -418,6 +418,8 @@ const tp3=parsePrice(txt,"TP3")||a.tau.structure?.levels?.tp3||0;
 
 // Store for openTrade
 lastRecData={dir,entry,sl,tp1,tp2,tp3,symbol:a.symbol,analysisId:a.id};
+// Also store clean parsed direction on analysis for openTrade to use
+a.parsedDir=dir;
 
 // Cross-validate: if levels clearly contradict direction, correct it
 // Long: entry > SL, TP > entry. Short: entry < SL, TP < entry.
@@ -513,7 +515,8 @@ let h=`<div style="display:flex;align-items:center;justify-content:space-between
 [...FAVS].sort((a,b)=>Math.abs(screenRes[b]?.composite?.raw||0)-Math.abs(screenRes[a]?.composite?.raw||0)).forEach(sym=>{
 const r=screenRes[sym],ht=r?Math.abs(r.composite.raw)*100:0,hc=ht>60?"var(--bull)":ht>30?"var(--gold)":"var(--tx4)",hot=r&&r.composite.meetsThreshold&&ht>30;
 h+=`<div class="scr-card${hot?' hot':''}" onclick="quickA('${sym}')"><div style="display:flex;justify-content:space-between;align-items:center"><span class="scr-pair">${sym.replace("USDT","")}<span style="color:var(--tx4);font-size:10px">/USDT</span></span>`;
-if(r)h+=`<span class="pill" style="background:${r.composite.rating.includes("BUY")?al('#00C853',.1):r.composite.rating.includes("SELL")?al('#FF1744',.1):al('#71717a',.1)};color:${r.composite.rating.includes("BUY")?"var(--bull)":r.composite.rating.includes("SELL")?"var(--bear)":"var(--tx3)"}">${r.composite.rating}</span>`;
+if(r){const rt=r.composite.rating;const scrLabel=rt==="STRONG BUY"?"STRONG BULL":rt==="BUY"?"BULL":rt==="STRONG SELL"?"STRONG BEAR":rt==="SELL"?"BEAR":rt;
+h+=`<span class="pill" style="background:${rt.includes("BUY")?al('#00C853',.1):rt.includes("SELL")?al('#FF1744',.1):al('#71717a',.1)};color:${rt.includes("BUY")?"var(--bull)":rt.includes("SELL")?"var(--bear)":"var(--tx3)"}">${scrLabel}</span>`;}
 h+=`</div><div class="scr-price" style="color:${r&&r.composite.raw>0?'var(--bull)':r&&r.composite.raw<0?'var(--bear)':'var(--tx)'}">${r?fmtP(r.price):'—'}</div>`;
 if(r)h+=`<div class="heat"><span style="color:${hc}">${ht.toFixed(0)}</span><div class="heat-bar"><div class="heat-fill" style="width:${ht}%;background:${hc}"></div></div><span style="color:var(--tx4)">${r.composite.bullCount}B/${r.composite.bearCount}S</span></div><div style="font-size:9px;color:var(--tx4);margin-top:4px">${r.time}</div>`;
 else h+=`<div style="font-size:10px;color:var(--tx4)">Not scanned</div>`;h+=`</div>`});h+=`</div>`;document.getElementById("v-screener").innerHTML=h}
@@ -564,18 +567,22 @@ tauIds.forEach(id=>{a.msgs.push({ag:id,text:`${a.tau[id].signal}: ${a.tau[id].de
 addMsg(flow,"chief","Chief Analyst","Composite Rating","#D4740E",`${a.composite.rating} (${(a.composite.raw*100).toFixed(0)}%)\n${a.composite.bullCount}B / ${a.composite.bearCount}S · Threshold ${MCFG[MOOD].minAlign} → ${a.composite.meetsThreshold?"✅ MEETS":"⛔ BELOW"}`);
 
 // PHASE 2: MIU — only on demand
+// Always set lastRecData from TAU so "Open Trade" works correctly
+const tauDir=a.composite.raw>0?"long":"short";
+const tauSL=a.tau.structure?.levels?.sl||0;
+const tauTP2=a.tau.structure?.levels?.tp2||0;
+const tauTP1=a.tau.structure?.levels?.tp1||0;
+lastRecData={dir:tauDir,entry:liveData[sym]?.price||K[K.length-1].c,sl:tauSL,tp1:tauTP1,tp2:tauTP2,tp3:a.tau.structure?.levels?.tp3||0,symbol:a.symbol,analysisId:a.id};
+
 if(API_KEY&&a.composite.meetsThreshold){
 // Show launch button instead of auto-running
 const miuBtn=document.createElement("div");miuBtn.id="miuLaunch";miuBtn.style.cssText="text-align:center;padding:16px;margin:12px 0;border:1px dashed var(--bd);border-radius:var(--rs);background:var(--chip)";
 miuBtn.innerHTML=`<div style="font-size:13px;font-weight:600;margin-bottom:6px">TAU Analysis Complete</div><div style="font-size:11px;color:var(--tx3);margin-bottom:10px">Technical signals ready. Run AI agents for deeper analysis (News, Macro, Flow, Chart + Chief recommendation).</div><div style="font-size:10px;color:var(--tx4);margin-bottom:10px">Estimated cost: ~$0.02 per run</div><button class="btn btn-gold" onclick="runMIU(${a.id})">🧠 Run AI Analysis</button>`;
 flow.appendChild(miuBtn);
-}else if(!API_KEY){addMsg(flow,"chief","Chief Analyst","OMU","#D4740E","TAU complete. Add API key for MIU.");
-lastRecData={dir:"long",entry:0,sl:0,tp1:0,tp2:0,tp3:0,symbol:a.symbol,analysisId:a.id}}
+}else if(!API_KEY){addMsg(flow,"chief","Chief Analyst","OMU","#D4740E","TAU complete. Add API key for MIU.")}
 else{addMsg(flow,"chief","Chief Analyst","OMU","#D4740E",`Alignment ${a.composite.aligned} < ${MCFG[MOOD].minAlign}. WAIT.`);a.rec="WAIT";
-const waitDir=a.composite?.raw>0?"long":a.composite?.raw<0?"short":"long";
-lastRecData={dir:waitDir,entry:0,sl:0,tp1:0,tp2:0,tp3:0,symbol:a.symbol,analysisId:a.id};
-// Also set rec to WAIT for runMIU override detection
-a.waitOverride=true}
+// Override: clear SL/TP (unreliable at low alignment), keep direction
+lastRecData.sl=0;lastRecData.tp1=0;lastRecData.tp2=0;lastRecData.tp3=0;lastRecData.entry=0}
 // Render whiteboard AFTER WAIT decision is made
 document.getElementById("aWB").innerHTML=renderWB(a);
 addReplyBar(flow,a);document.getElementById("aBtn").disabled=false;rCmd()}
@@ -795,7 +802,16 @@ flow.insertAdjacentHTML("beforeend",mH)}
 otherMsgs.forEach(m=>{if(m===initM||m===compM)return;
 if(m.ag==="cro")addMsg(flow,"cro","Trader","CRO","#C8963E",m.text);
 else{const aid=m.ag.replace("-rec",""),ag=AG[aid];if(ag)addMsg(flow,aid==="chief"?"chief":"agent",ag.n,ag.u,ag.c,m.text)}});
-document.getElementById("aWB").innerHTML=renderWB(a);addReplyBar(flow,a)},200)}
+document.getElementById("aWB").innerHTML=renderWB(a);
+// Set lastRecData from this analysis so "Open Trade" button works correctly
+const vDir=a.composite?.raw>0?"long":"short";
+const vSL=a.tau.structure?.levels?.sl||0;
+const vTP1=a.tau.structure?.levels?.tp1||0;
+const vTP2=a.tau.structure?.levels?.tp2||0;
+const vTP3=a.tau.structure?.levels?.tp3||0;
+const vEntry=liveData[a.symbol]?.price||a.priceAtAnalysis||0;
+lastRecData={dir:vDir,entry:vEntry,sl:vSL,tp1:vTP1,tp2:vTP2,tp3:vTP3,symbol:a.symbol,analysisId:a.id};
+addReplyBar(flow,a)},200)}
 
 // ═══ PAPER TRADES ═══
 function rTrades(){const op=trades.filter(t=>t.status==="open"),pend=trades.filter(t=>t.status==="pending");
@@ -927,19 +943,34 @@ document.getElementById("editOv")?.remove();
 if(changes.length){saveState();rTrades();lg("Ledger",`✏️ ${t.symbol} modified: ${changes.join(", ")}`)}}
 
 function openTrade(){const rd=lastRecData||{};const sym=curA?.symbol||rd.symbol||FAVS[0];
-const dir=rd.dir||"long";const recEntry=rd.entry||0;
-const isWaitOverride=curA?.rec==="WAIT"||(curA?.composite&&!curA.composite.meetsThreshold);
-// Don't auto-fill SL/TP on WAIT overrides — levels unreliable at low alignment
-const sl=isWaitOverride?0:(rd.sl||curA?.tau?.structure?.levels?.sl||0);
-const tp=isWaitOverride?0:(rd.tp2||rd.tp1||curA?.tau?.structure?.levels?.tp2||0);
 const curPrice=liveData[sym]?.price||0;
-let canExec=false;
-// WAIT override = always pending, user must confirm
-if(!isWaitOverride&&recEntry>0){
-if(dir==="short")canExec=curPrice>=recEntry;
-else if(dir==="long")canExec=curPrice<=recEntry;
-else canExec=false;
+
+// === DIRECTION ===
+// Priority: 1) analysis.parsedDir (from Chief), 2) composite signal, 3) default long
+let dir="long";
+if(curA?.parsedDir==="long"||curA?.parsedDir==="short"){dir=curA.parsedDir}
+else if(curA?.composite){dir=curA.composite.raw>=0?"long":"short"}
+
+// === WAIT detection ===
+// Chief said WAIT, OR threshold not met, OR parsedDir is "wait"
+const chiefSaidWait=curA?.parsedDir==="wait";
+const thresholdNotMet=curA?.composite&&!curA.composite.meetsThreshold;
+const isWait=chiefSaidWait||(thresholdNotMet&&!curA?.parsedDir);
+// If Chief said wait, direction from composite
+if(isWait&&curA?.composite){dir=curA.composite.raw>=0?"long":"short"}
+
+// === SL/TP/Entry ===
+let sl=0,tp=0,canExec=false;
+if(isWait){
+// Forced pending, empty SL/TP
+sl=0;tp=0;canExec=false;
+}else{
+// Use Chief's levels if available, else structure
+sl=rd.sl||curA?.tau?.structure?.levels?.sl||0;
+tp=rd.tp2||rd.tp1||curA?.tau?.structure?.levels?.tp2||0;
+canExec=curPrice>0;
 }
+const recEntry=isWait?0:(rd.entry||curPrice);
 const defSzUsdt=Math.round(FUND*0.05);
 
 const ov=document.createElement("div");ov.className="rec-overlay";ov.id="tradeOv";ov.onclick=e=>{if(e.target===ov)ov.remove()};
