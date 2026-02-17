@@ -116,6 +116,7 @@ button{font-family:inherit;cursor:pointer}input,select,textarea{font-family:inhe
 // ═══ STATE ═══
 let API_KEY=localStorage.getItem("th_key")||"",MODEL=localStorage.getItem("th_model")||"claude-sonnet-4-20250514",MOOD=localStorage.getItem("th_mood")||"standard";
 let FUND=parseFloat(localStorage.getItem("th_fund"))||10000,DEF_LEV=parseInt(localStorage.getItem("th_lev"))||10;
+let USERNAME=localStorage.getItem("th_username")||"Trader";
 let connected=false,wsConn=false,ws=null,cv="cmd",curA=null,liveData={},screenRes={};
 let trades,journal,analyses,actLog;
 try{trades=JSON.parse(localStorage.getItem("th_trades")||"[]")}catch(e){trades=[];console.error("Failed to load trades:",e)}
@@ -332,7 +333,8 @@ function esc(t){return t.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g
 .replace(/^[\-\•]\s+/gm,"· ").replace(/\n/g,"<br>")}
 function cleanMd(t){return t.replace(/#{1,6}\s*/g,"").replace(/\*\*(.*?)\*\*/g,"$1").replace(/\*(.*?)\*/g,"$1").replace(/^[\s]*[-•]\s*/gm,"· ").replace(/\n{3,}/g,"\n\n").trim()}
 function addMsg(el,type,name,sub,color,text){const d=document.createElement("div");d.className=`msg msg-${type}`;const a=Object.values(AG).find(x=>x.n===name);
-d.innerHTML=`<div class="msg-head"><div class="av" style="background:${color}">${a?.av||"??"}</div><span class="msg-name">${name}</span><span class="msg-role">${sub}</span><span class="msg-time">${now()}</span></div><div class="msg-body">${esc(text)}</div>`;
+const av=a?.av||(type==="cro"?USERNAME.substring(0,2).toUpperCase():"??");
+d.innerHTML=`<div class="msg-head"><div class="av" style="background:${color}">${av}</div><span class="msg-name">${name}</span><span class="msg-role">${sub}</span><span class="msg-time">${now()}</span></div><div class="msg-body">${esc(text)}</div>`;
 el.appendChild(d);d.scrollIntoView({behavior:"smooth",block:"end"})}
 function showTh(el,n,t){const d=document.createElement("div");d.className="thinking";d.id="thk";d.innerHTML=`<b>${n}</b> ${t} <span class="thinking-dots"><span></span><span></span><span></span></span>`;el.appendChild(d);d.scrollIntoView({behavior:"smooth"})}
 function rmTh(el){el.querySelector("#thk")?.remove()}
@@ -471,6 +473,7 @@ function rSettings(){document.getElementById("v-settings").innerHTML=`<div style
 <button class="btn btn-gold" onclick="saveSet()">Save & Test</button><span style="margin-left:8px"><button class="btn btn-ghost btn-sm" onclick="localStorage.removeItem('th_model');MODEL='claude-sonnet-4-20250514';saveSet()">🔄 Reset Model</button></span><div id="setRes" style="margin-top:8px;font-size:12px"></div>
 <div style="margin-top:6px;font-size:10px;color:var(--tx4);font-family:monospace">Debug: model=${MODEL} | key=${API_KEY?API_KEY.substring(0,12)+"...":"empty"}</div></div>
 <div class="cd" style="margin-bottom:12px"><div style="font-size:12px;font-weight:600;margin-bottom:10px">Portfolio</div>
+<div class="field"><label>Your Name / Nickname</label><input id="userNameIn" value="${USERNAME}" placeholder="Trader"></div>
 <div style="display:flex;gap:12px"><div class="field" style="flex:1"><label>Initial Fund (USDT)</label><input type="number" id="fundIn" value="${FUND}" step="100"></div>
 <div class="field" style="flex:1"><label>Default Leverage</label><select id="levIn">${[1,2,3,5,10,15,20,25,50,75,100,125].map(x=>`<option value="${x}"${x===DEF_LEV?" selected":""}>${x}x</option>`).join("")}</select></div></div>
 <div style="font-size:10px;color:var(--tx4);margin-bottom:8px">Fund: ${fmtP(FUND,0)} USDT · Default Lev: ${DEF_LEV}x · Buying Power: ${fmtP(FUND*DEF_LEV,0)} USDT</div>
@@ -488,7 +491,7 @@ function rSettings(){document.getElementById("v-settings").innerHTML=`<div style
 <div style="font-size:10px;color:var(--tx3);margin-bottom:8px">Trades: ${trades.length} · Analyses: ${analyses.length} · Journal: ${journal.length} · Log: ${actLog.length}</div>
 <button class="btn btn-sm btn-ghost" style="border-color:var(--bear);color:var(--bear)" onclick="if(confirm('Delete ALL trading data? This cannot be undone.\\n\\nThis will clear:\\n- All open & pending trades\\n- All closed trade history\\n- All analyses\\n- Activity log')){trades=[];journal=[];analyses=[];actLog=[];saveState();rTrades();rCmd();rSettings();lg('System','All data cleared')}">🗑 Clear All Trading Data</button></div></div>`}
 async function saveSet(){API_KEY=document.getElementById("akIn").value.trim();MODEL=document.getElementById("mdSel").value;localStorage.setItem("th_key",API_KEY);localStorage.setItem("th_model",MODEL);document.getElementById("setRes").textContent="Testing...";await testAPI();document.getElementById("setRes").innerHTML=connected?`<span style="color:var(--bull)">✓ Connected (${MODEL})</span>`:`<span style="color:var(--bear)">✗ Failed — check key & model. Open browser console (F12) for details.</span>`;if(connected&&localStorage.getItem("th_sent_on")==="1")startSentinel()}
-function saveFund(){FUND=parseFloat(document.getElementById("fundIn").value)||10000;DEF_LEV=parseInt(document.getElementById("levIn").value)||10;localStorage.setItem("th_fund",FUND);localStorage.setItem("th_lev",DEF_LEV);rSettings();lg("Settings",`Fund: ${fmtP(FUND,0)} · Lev: ${DEF_LEV}x`)}
+function saveFund(){USERNAME=document.getElementById("userNameIn").value.trim()||"Trader";localStorage.setItem("th_username",USERNAME);FUND=parseFloat(document.getElementById("fundIn").value)||10000;DEF_LEV=parseInt(document.getElementById("levIn").value)||10;localStorage.setItem("th_fund",FUND);localStorage.setItem("th_lev",DEF_LEV);rSettings();lg("Settings",`Fund: ${fmtP(FUND,0)} · Lev: ${DEF_LEV}x`)}
 function saveFavs(){const v=document.getElementById("favIn").value.split(",").map(s=>s.trim().toUpperCase()).filter(Boolean);localStorage.setItem("th_favs",JSON.stringify(v));FAVS.length=0;v.forEach(f=>FAVS.push(f));rScreener()}
 function saveScanFreq(){SCAN_FREQ=parseInt(document.getElementById("scanFreqSel").value)||360;localStorage.setItem("th_scan_freq",SCAN_FREQ);if(sentInterval){stopSentinel();startSentinel()}rSettings()}
 
@@ -634,7 +637,7 @@ async function sendR(aId){const a=analyses.find(x=>x.id===aId);if(!a||!API_KEY)r
 const inp=document.getElementById(`aR-${a.id}`),tgt=document.getElementById(`aT-${a.id}`).value,msg=inp.value.trim();if(!msg)return;inp.value="";
 const bar=inp.closest(".chat-bar"),ct=bar.parentElement;
 const cro=document.createElement("div");cro.className="msg msg-cro";
-cro.innerHTML=`<div class="msg-head"><div class="av" style="background:#C8963E">AK</div><span class="msg-name">Trader</span><span class="msg-role">CRO</span></div><div class="msg-body">${esc(msg)}</div>`;
+cro.innerHTML=`<div class="msg-head"><div class="av" style="background:#C8963E">${USERNAME.substring(0,2).toUpperCase()}</div><span class="msg-name">${USERNAME}</span><span class="msg-role">CRO</span></div><div class="msg-body">${esc(msg)}</div>`;
 ct.insertBefore(cro,bar);a.msgs.push({ag:"cro",text:msg});
 const ctx=a.msgs.slice(-6).map(m=>`[${AG[m.ag?.replace("-rec","")]?.n||m.ag}]: ${m.text.substring(0,200)}`).join("\n");
 
@@ -800,7 +803,7 @@ mH+=`<div class="ag-panel${i===0?' on':''}" data-tab="miu-${i}"><div class="msg 
 flow.insertAdjacentHTML("beforeend",mH)}
 // Remaining (chief rec, CRO, RT replies)
 otherMsgs.forEach(m=>{if(m===initM||m===compM)return;
-if(m.ag==="cro")addMsg(flow,"cro","Trader","CRO","#C8963E",m.text);
+if(m.ag==="cro")addMsg(flow,"cro",USERNAME,"CRO","#C8963E",m.text);
 else{const aid=m.ag.replace("-rec",""),ag=AG[aid];if(ag)addMsg(flow,aid==="chief"?"chief":"agent",ag.n,ag.u,ag.c,m.text)}});
 document.getElementById("aWB").innerHTML=renderWB(a);
 // Set lastRecData from this analysis so "Open Trade" button works correctly
@@ -847,7 +850,7 @@ h+=`<div style="font-size:12px;color:var(--tx3);margin-top:8px;padding-top:8px;b
 const pRisk=Math.abs(t.entry-(t.sl||0));const pReward=Math.abs((t.tp||0)-t.entry);
 if(pRisk>0&&pReward>0){const prr=(pReward/pRisk).toFixed(1);
 h+=`<div style="display:flex;align-items:center;gap:6px;margin-top:4px;font-size:11px"><span style="color:var(--tx3)">Risk:Reward</span><span style="font-weight:700;color:${prr>=2?'var(--bull)':prr>=1?'var(--gold)':'var(--bear)'}">1:${prr}</span></div>`}
-h+=`<div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-sm btn-ghost" style="flex:1" onclick="editTrade(${t.id})">✏️ Edit</button><button class="btn btn-sm btn-ghost" style="flex:1;border-color:var(--bear);color:var(--bear)" onclick="cancelPend(${t.id})">Cancel</button></div></div>`});h+=`</div>`}
+h+=`<div style="display:flex;gap:8px;margin-top:10px"><button class="btn btn-sm btn-ghost" style="flex:1" onclick="editTrade(${t.id})">✏️ Edit</button><button class="btn btn-sm btn-gold" style="flex:1" onclick="activatePend(${t.id})">⚡ Open Now</button><button class="btn btn-sm btn-ghost" style="flex:1;border-color:var(--bear);color:var(--bear)" onclick="cancelPend(${t.id})">Cancel</button></div></div>`});h+=`</div>`}
 
 // ── Open ──
 if(op.length){h+=`<div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--bull);margin-bottom:10px">⚡ Open Positions</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px;margin-bottom:20px">`;
@@ -890,6 +893,11 @@ if(journal.length){h+=`<div style="font-size:12px;font-weight:600;text-transform
 journal.slice(-5).reverse().forEach(j=>h+=`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--bdL);font-size:13px"><b>${j.symbol.replace("USDT","")}</b><span style="font-size:11px;color:var(--tx4)">${j.dir.toUpperCase()}</span><span style="font-weight:700;color:${j.pnl>=0?'var(--bull)':'var(--bear)'}">${j.pnl>=0?"+":""}${j.pnl.toFixed(2)}%</span><span style="color:${(j.pnlUsdt||0)>=0?'var(--bull)':'var(--bear)'};font-size:12px">${(j.pnlUsdt||0)>=0?"+":""}${(j.pnlUsdt||0).toFixed(2)} USDT</span><span style="color:var(--tx4);margin-left:auto;font-size:11px">${j.closed}</span></div>`)}
 document.getElementById("v-trades").innerHTML=h}
 function cancelPend(id){trades=trades.filter(x=>x.id!==id);rTrades();lg("Ledger","Pending order cancelled")}
+function activatePend(id){const t=trades.find(x=>x.id===id);if(!t)return;const p=liveData[t.symbol]?.price;
+if(!p){alert("No live price. Wait for WebSocket connection.");return}
+if(!confirm(`Open ${t.dir.toUpperCase()} ${t.symbol} NOW at market price ${fmtP(p)}?`))return;
+t.status="open";t.entry=p;t.opened=now();t._openTs=Date.now();
+rTrades();rCmd();lg("Ledger",`⚡ Manual open: ${t.dir.toUpperCase()} ${t.symbol} @ ${fmtP(p)}`)}
 
 function editTrade(id){const t=trades.find(x=>x.id===id);if(!t)return;
 const curP=liveData[t.symbol]?.price||t.cur||t.entry;
@@ -1099,7 +1107,16 @@ u.ag.forEach(id=>{const a=AG[id];h+=`<div class="t-agent"><div class="av" style=
 h+=`</div>`;document.getElementById("v-team").innerHTML=h}
 
 // ═══ JOURNAL ═══
-function rJournal(){let h=`<div class="sec-t">Journal</div><div class="sec-s">${journal.length} trades · Fund: ${fmtP(FUND,0)} USDT</div>`;
+function exportJournalCSV(){
+const hdr="Symbol,Direction,Mode,Mood,Leverage,Entry,Exit,SL,TP,Margin,P&L%,P&LUSDT,Opened,Closed\n";
+const rows=journal.map(j=>`${j.symbol},${j.dir},${j.mode||""},${j.mood||""},${j.lev||1},${j.entry},${j.cur||j.entry},${j.sl||""},${j.tp||""},${j.margin||0},${j.pnl.toFixed(2)},${(j.pnlUsdt||0).toFixed(2)},${j.opened},${j.closed}`).join("\n");
+const blob=new Blob([hdr+rows],{type:"text/csv"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=`KhahanA_Journal_${new Date().toISOString().split("T")[0]}.csv`;a.click()}
+function delJournal(id){if(!confirm("Delete this journal entry?"))return;journal=journal.filter(j=>j.id!==id);saveState();rJournal()}
+function clearJournal(){if(!confirm("Delete ALL journal entries? This cannot be undone."))return;journal=[];saveState();rJournal()}
+function clearAnalyses(){if(!confirm("Delete ALL analyses? This cannot be undone."))return;analyses=[];saveState();if(cv==="analyses")rAnalyses()}
+function rJournal(){let h=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><div><div class="sec-t">Journal</div><div class="sec-s" style="margin-bottom:0">${journal.length} trades · Fund: ${fmtP(FUND,0)} USDT</div></div>`;
+if(journal.length){h+=`<div style="display:flex;gap:6px"><button class="btn btn-ghost btn-sm" onclick="exportJournalCSV()">📥 CSV</button><button class="btn btn-ghost btn-sm" onclick="clearJournal()">🗑 Clear</button><button class="btn btn-ghost btn-sm" onclick="clearAnalyses()">🗑 Analyses</button></div>`}
+h+=`</div>`;
 if(!journal.length){h+=`<div style="padding:30px;text-align:center;color:var(--tx3)">No closed trades yet</div>`;document.getElementById("v-journal").innerHTML=h;return}
 const w=journal.filter(j=>j.pnl>0).length,l=journal.length-w;
 const totalUsdt=journal.reduce((s,j)=>s+(j.pnlUsdt||0),0);
@@ -1144,7 +1161,7 @@ if(j.mode){h+=`<span style="font-size:9px;padding:1px 5px;border-radius:2px;back
 if(j.mood){const mc=MCFG[j.mood]||MCFG.standard;h+=`<span style="font-size:9px;padding:1px 5px;border-radius:2px;background:var(--chip);color:var(--tx3)">${mc.icon} ${mc.label}</span>`}
 h+=`<span style="font-weight:700;color:${j.pnl>=0?'var(--bull)':'var(--bear)'}">${j.pnl>=0?"+":""}${j.pnl.toFixed(2)}%</span>`;
 h+=`<span style="font-size:11px;color:${(j.pnlUsdt||0)>=0?'var(--bull)':'var(--bear)'}">${(j.pnlUsdt||0)>=0?"+":""}${(j.pnlUsdt||0).toFixed(2)} USDT</span>`;
-h+=`<span style="font-size:10px;color:var(--tx4);margin-left:auto">${j.opened} → ${j.closed}</span></div>`;
+h+=`<span style="font-size:10px;color:var(--tx4);margin-left:auto">${j.opened} → ${j.closed}</span><button style="background:none;border:none;color:var(--tx4);cursor:pointer;font-size:11px;padding:2px 4px;margin-left:6px" onclick="delJournal(${j.id})" title="Delete">🗑</button></div>`;
 // Trade details
 h+=`<div style="font-size:10px;color:var(--tx3);margin-top:4px">Entry ${fmtP(j.entry)} → Exit ${fmtP(j.cur||j.entry)} · SL ${fmtP(j.sl||0)} · TP ${fmtP(j.tp||0)} · Margin ${fmtP(j.margin||0,0)} USDT</div>`;
 // Notes from linked analysis
@@ -1154,12 +1171,15 @@ const comp=a.composite;const hasMIU=a.msgs?.some(m=>["news","macro","flow","char
 const sigNames={trend:"Trend",momentum:"Mom",volume:"Vol",structure:"Struct",volatility:"Volat",funding:"Fund",imbalance:"Imbal"};
 const sigs=["trend","momentum","volume","structure","volatility","funding","imbalance"].map(id=>{const s=a.tau?.[id];if(!s)return null;return`${sigNames[id]}: ${s.signal}`}).filter(Boolean);
 let note=`<b>TAU:</b> ${comp?.rating||"?"} (${comp?.bullCount||0}B/${comp?.bearCount||0}S) · ${sigs.join(" · ")}`;
-// Chief rec summary
+// Chief rec summary - parse full text more carefully
 if(hasMIU){const chiefMsg=a.msgs?.find(m=>m.ag==="chief-rec");
-if(chiefMsg){const dirM=chiefMsg.text.match(/DIRECTION\s*[:：]\s*(LONG|SHORT|WAIT)/i);
-note+=`<br><b>Chief:</b> ${dirM?dirM[1]:"?"}`;
-const rationale=chiefMsg.text.match(/RATIONALE[:\s]*(.*?)(?:\n|$)/i);
-if(rationale)note+=` — ${rationale[1].substring(0,120)}`}}
+if(chiefMsg){const txt=chiefMsg.text;
+const dirM=txt.match(/DIRECTION\s*[:：]\s*(LONG|SHORT|WAIT)/i);
+const confM=txt.match(/CONFIDENCE\s*[:：]\s*(HIGH|MEDIUM|LOW)/i);
+note+=`<br><b>Chief:</b> ${dirM?dirM[1]:"—"}${confM?" · "+confM[1]:""}`;
+// Try multiple patterns for rationale
+const ratM=txt.match(/RATIONALE[:\s]*([^\n]+(?:\n(?![A-Z]{3,})[^\n]+)*)/i);
+if(ratM)note+=`<br><i>${ratM[1].trim().replace(/\n/g," ").substring(0,300)}</i>`}}
 h+=`<div style="margin-top:6px;padding:6px 8px;font-size:10px;color:var(--tx2);background:var(--chip);border-radius:var(--rs);line-height:1.6">📝 ${note}</div>`}
 // User note (editable)
 const noteKey=`jnote_${j.id}`;
