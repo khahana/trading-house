@@ -446,7 +446,7 @@ document.getElementById("recOverlayRoot").innerHTML=h}
 function init(){
 console.log("KTH Init — API_KEY:",API_KEY?"set ("+API_KEY.substring(0,10)+"...)":"empty","MODEL:",MODEL);
 document.getElementById("moodSel").value=MOOD;
-if(API_KEY){testAPI();startSentinel()}
+if(API_KEY){testAPI();if(localStorage.getItem("th_sent_on")==="1")startSentinel()}
 startBgPrices();
 // Auto-connect WS for first active trade symbol
 const firstActive=trades.find(t=>t.status==="open"||t.status==="pending");
@@ -482,12 +482,12 @@ function rSettings(){document.getElementById("v-settings").innerHTML=`<div style
 <div style="font-size:11px;color:var(--tx2);margin-bottom:8px">Scans for upcoming macro & crypto events (FOMC, CPI, token unlocks, etc). Triggers pre-event briefings 1 hour before major events.</div>
 <div class="field"><label>Scan Frequency</label><select id="scanFreqSel" onchange="saveScanFreq()"><option value="60"${SCAN_FREQ===60?" selected":""}>Every 1 hour</option><option value="120"${SCAN_FREQ===120?" selected":""}>Every 2 hours</option><option value="360"${SCAN_FREQ===360?" selected":""}>Every 6 hours (~$0.01/day)</option><option value="720"${SCAN_FREQ===720?" selected":""}>Every 12 hours</option><option value="1440"${SCAN_FREQ===1440?" selected":""}>Once a day</option></select></div>
 <div style="font-size:10px;color:var(--tx3);margin-bottom:8px">Status: ${sentInterval?"🟢 Active":"🔴 Inactive"} · Alerts: ${sentAlerts.length} · Last scan: ${sentLastScan?new Date(sentLastScan).toLocaleTimeString():"Never"}</div>
-<div style="display:flex;gap:6px"><button class="btn btn-sm ${sentInterval?"btn-ghost":"btn-gold"}" onclick="${sentInterval?"stopSentinel();rSettings()":"startSentinel();rSettings()"}">${sentInterval?"⏸ Pause":"▶ Start"}</button><button class="btn btn-sm btn-ghost" onclick="runSentinelScan()">🔄 Scan Now</button><button class="btn btn-sm btn-ghost" onclick="sentAlerts=[];sentSeen.clear();updNtfBadge();rSettings()">🗑 Clear</button></div></div>
+<div style="display:flex;gap:6px"><button class="btn btn-sm ${sentInterval?"btn-ghost":"btn-gold"}" onclick="${sentInterval?"stopSentinel();localStorage.setItem('th_sent_on','0');rSettings()":"startSentinel();localStorage.setItem('th_sent_on','1');rSettings()"}">${sentInterval?"⏸ Stop":"▶ Start"}</button><button class="btn btn-sm btn-ghost" onclick="runSentinelScan()">🔄 Scan Now</button><button class="btn btn-sm btn-ghost" onclick="sentAlerts=[];sentSeen.clear();updNtfBadge();rSettings()">🗑 Clear</button></div></div>
 <div class="cd" style="margin-top:12px"><div style="font-size:12px;font-weight:600;margin-bottom:10px">💾 Data Persistence</div>
 <div style="font-size:11px;color:var(--tx2);margin-bottom:8px">All trades, analyses, journal, and activity log are saved in your browser's localStorage. Data persists across page reloads.</div>
 <div style="font-size:10px;color:var(--tx3);margin-bottom:8px">Trades: ${trades.length} · Analyses: ${analyses.length} · Journal: ${journal.length} · Log: ${actLog.length}</div>
 <button class="btn btn-sm btn-ghost" style="border-color:var(--bear);color:var(--bear)" onclick="if(confirm('Delete ALL trading data? This cannot be undone.\\n\\nThis will clear:\\n- All open & pending trades\\n- All closed trade history\\n- All analyses\\n- Activity log')){trades=[];journal=[];analyses=[];actLog=[];saveState();rTrades();rCmd();rSettings();lg('System','All data cleared')}">🗑 Clear All Trading Data</button></div></div>`}
-async function saveSet(){API_KEY=document.getElementById("akIn").value.trim();MODEL=document.getElementById("mdSel").value;localStorage.setItem("th_key",API_KEY);localStorage.setItem("th_model",MODEL);document.getElementById("setRes").textContent="Testing...";await testAPI();document.getElementById("setRes").innerHTML=connected?`<span style="color:var(--bull)">✓ Connected (${MODEL})</span>`:`<span style="color:var(--bear)">✗ Failed — check key & model. Open browser console (F12) for details.</span>`;if(connected)startSentinel()}
+async function saveSet(){API_KEY=document.getElementById("akIn").value.trim();MODEL=document.getElementById("mdSel").value;localStorage.setItem("th_key",API_KEY);localStorage.setItem("th_model",MODEL);document.getElementById("setRes").textContent="Testing...";await testAPI();document.getElementById("setRes").innerHTML=connected?`<span style="color:var(--bull)">✓ Connected (${MODEL})</span>`:`<span style="color:var(--bear)">✗ Failed — check key & model. Open browser console (F12) for details.</span>`;if(connected&&localStorage.getItem("th_sent_on")==="1")startSentinel()}
 function saveFund(){FUND=parseFloat(document.getElementById("fundIn").value)||10000;DEF_LEV=parseInt(document.getElementById("levIn").value)||10;localStorage.setItem("th_fund",FUND);localStorage.setItem("th_lev",DEF_LEV);rSettings();lg("Settings",`Fund: ${fmtP(FUND,0)} · Lev: ${DEF_LEV}x`)}
 function saveFavs(){const v=document.getElementById("favIn").value.split(",").map(s=>s.trim().toUpperCase()).filter(Boolean);localStorage.setItem("th_favs",JSON.stringify(v));FAVS.length=0;v.forEach(f=>FAVS.push(f));rScreener()}
 function saveScanFreq(){SCAN_FREQ=parseInt(document.getElementById("scanFreqSel").value)||360;localStorage.setItem("th_scan_freq",SCAN_FREQ);if(sentInterval){stopSentinel();startSentinel()}rSettings()}
@@ -1041,6 +1041,7 @@ const t={id:Date.now(),symbol:sym,dir,
 entry:entryPrice,sl:parseFloat(String(slEl.value).replace(/[^0-9.]/g,"")),
 tp:parseFloat(String(tpEl.value).replace(/[^0-9.]/g,"")),margin,lev,
 notional:margin*lev,_openTs:Date.now(),analysisId:rd.analysisId||null,
+mode:curA?.mode||"swing",mood:MOOD||"standard",
 status:orderType==="pending"?"pending":"open",orderType,pnl:0,pnlUsdt:0,cur:0,opened:now()};
 if(t.entry<=0&&orderType==="market"){alert("No live price available. Connect WebSocket first.");return}
 if(orderType==="pending"&&(isNaN(t.entry)||t.entry<=0)){alert("Enter a valid entry price for pending order.");return}
@@ -1099,11 +1100,110 @@ h+=`</div>`;document.getElementById("v-team").innerHTML=h}
 
 // ═══ JOURNAL ═══
 function rJournal(){let h=`<div class="sec-t">Journal</div><div class="sec-s">${journal.length} trades · Fund: ${fmtP(FUND,0)} USDT</div>`;
-if(!journal.length){h+=`<div style="padding:30px;text-align:center;color:var(--tx3)">No closed trades</div>`;document.getElementById("v-journal").innerHTML=h;return}
-const w=journal.filter(j=>j.pnl>0).length;const totalUsdt=journal.reduce((s,j)=>s+(j.pnlUsdt||0),0);
-h+=`<div style="display:flex;gap:16px;margin-bottom:14px;font-size:12px;flex-wrap:wrap"><span style="color:var(--bull)">Wins: ${w}</span><span style="color:var(--bear)">Losses: ${journal.length-w}</span><span>Rate: ${(w/journal.length*100).toFixed(0)}%</span><span>Avg: ${(journal.reduce((s,j)=>s+j.pnl,0)/journal.length).toFixed(2)}%</span><span style="font-weight:700;color:${totalUsdt>=0?'var(--bull)':'var(--bear)'}">Total: ${totalUsdt>=0?"+":""}${totalUsdt.toFixed(2)} USDT</span></div>`;
-journal.slice().reverse().forEach(j=>h+=`<div class="cd" style="margin-bottom:6px"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><b>${j.symbol.replace("USDT","")}</b><span style="font-size:9px;padding:1px 5px;border-radius:2px;background:var(--chip);color:var(--tx3)">${j.lev||1}x</span><span style="font-weight:700;color:${j.pnl>=0?'var(--bull)':'var(--bear)'}">${j.pnl>=0?"+":""}${j.pnl.toFixed(2)}%</span><span style="font-size:11px;color:${(j.pnlUsdt||0)>=0?'var(--bull)':'var(--bear)'}">${(j.pnlUsdt||0)>=0?"+":""}${(j.pnlUsdt||0).toFixed(2)} USDT</span><span style="font-size:10px;color:var(--tx4);margin-left:auto">${j.opened} → ${j.closed}</span></div><div style="font-size:10px;color:var(--tx3);margin-top:3px">Entry ${fmtP(j.entry)} → ${fmtP(j.cur||j.entry)} · Margin ${fmtP(j.margin||0,0)} USDT</div></div>`);
+if(!journal.length){h+=`<div style="padding:30px;text-align:center;color:var(--tx3)">No closed trades yet</div>`;document.getElementById("v-journal").innerHTML=h;return}
+const w=journal.filter(j=>j.pnl>0).length,l=journal.length-w;
+const totalUsdt=journal.reduce((s,j)=>s+(j.pnlUsdt||0),0);
+const avgPnl=journal.reduce((s,j)=>s+j.pnl,0)/journal.length;
+const avgWin=w?journal.filter(j=>j.pnl>0).reduce((s,j)=>s+j.pnl,0)/w:0;
+const avgLoss=l?journal.filter(j=>j.pnl<=0).reduce((s,j)=>s+j.pnl,0)/l:0;
+const bestTrade=journal.reduce((b,j)=>j.pnl>b.pnl?j:b,journal[0]);
+const worstTrade=journal.reduce((b,j)=>j.pnl<b.pnl?j:b,journal[0]);
+const longTrades=journal.filter(j=>j.dir==="long"),shortTrades=journal.filter(j=>j.dir==="short");
+const longWR=longTrades.length?(longTrades.filter(j=>j.pnl>0).length/longTrades.length*100).toFixed(0):0;
+const shortWR=shortTrades.length?(shortTrades.filter(j=>j.pnl>0).length/shortTrades.length*100).toFixed(0):0;
+const profitFactor=journal.filter(j=>j.pnl>0).reduce((s,j)=>s+(j.pnlUsdt||0),0)/(Math.abs(journal.filter(j=>j.pnl<=0).reduce((s,j)=>s+(j.pnlUsdt||0),0))||1);
+
+// Performance summary
+h+=`<div class="cd" style="margin-bottom:14px"><div style="font-size:12px;font-weight:600;margin-bottom:10px">📊 Performance</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px;font-size:11px">
+<div><span style="color:var(--tx3)">Win Rate</span><div style="font-size:16px;font-weight:700;color:${w/journal.length>.5?'var(--bull)':'var(--bear)'}">${(w/journal.length*100).toFixed(0)}%</div><div style="font-size:10px;color:var(--tx4)">${w}W / ${l}L</div></div>
+<div><span style="color:var(--tx3)">Total P&L</span><div style="font-size:16px;font-weight:700;color:${totalUsdt>=0?'var(--bull)':'var(--bear)'}">${totalUsdt>=0?"+":""}${totalUsdt.toFixed(2)}</div><div style="font-size:10px;color:var(--tx4)">USDT</div></div>
+<div><span style="color:var(--tx3)">Avg Trade</span><div style="font-weight:700;color:${avgPnl>=0?'var(--bull)':'var(--bear)'}">${avgPnl>=0?"+":""}${avgPnl.toFixed(2)}%</div></div>
+<div><span style="color:var(--tx3)">Avg Win</span><div style="font-weight:700;color:var(--bull)">+${avgWin.toFixed(2)}%</div></div>
+<div><span style="color:var(--tx3)">Avg Loss</span><div style="font-weight:700;color:var(--bear)">${avgLoss.toFixed(2)}%</div></div>
+<div><span style="color:var(--tx3)">Profit Factor</span><div style="font-weight:700;color:${profitFactor>=1?'var(--bull)':'var(--bear)'}">${profitFactor.toFixed(2)}</div></div>
+<div><span style="color:var(--tx3)">Long WR</span><div style="font-weight:700">${longWR}% <span style="font-size:9px;color:var(--tx4)">(${longTrades.length})</span></div></div>
+<div><span style="color:var(--tx3)">Short WR</span><div style="font-weight:700">${shortWR}% <span style="font-size:9px;color:var(--tx4)">(${shortTrades.length})</span></div></div>
+</div>
+<div style="margin-top:10px;font-size:10px;color:var(--tx3)">Best: ${bestTrade.symbol.replace("USDT","")} +${bestTrade.pnl.toFixed(2)}% · Worst: ${worstTrade.symbol.replace("USDT","")} ${worstTrade.pnl.toFixed(2)}%</div>
+${journal.length>=3?`<button class="btn btn-gold btn-sm" style="margin-top:10px" onclick="runJournalAI()">🧠 AI Performance Review (~$0.02)</button>`:""}</div>`;
+
+// AI Review panel
+h+=`<div id="journalAIPanel"></div>`;
+
+// Trade entries
+journal.slice().reverse().forEach(j=>{
+const a=analyses.find(x=>x.id===j.analysisId);
+h+=`<div class="cd" style="margin-bottom:8px">`;
+// Header row
+h+=`<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">`;
+h+=`<b>${j.symbol.replace("USDT","")}</b>`;
+h+=`<span style="font-size:10px;padding:2px 6px;border-radius:3px;background:${j.dir==="long"?al('#00C853',.1):al('#FF1744',.1)};color:${j.dir==="long"?"var(--bull)":"var(--bear)"};font-weight:600">${j.dir.toUpperCase()}</span>`;
+h+=`<span style="font-size:9px;padding:1px 5px;border-radius:2px;background:var(--chip);color:var(--tx3)">${j.lev||1}x</span>`;
+if(j.mode){h+=`<span style="font-size:9px;padding:1px 5px;border-radius:2px;background:var(--chip);color:var(--tx3)">${j.mode==="scalp"?"Scalp":"Swing"}</span>`}
+if(j.mood){const mc=MCFG[j.mood]||MCFG.standard;h+=`<span style="font-size:9px;padding:1px 5px;border-radius:2px;background:var(--chip);color:var(--tx3)">${mc.icon} ${mc.label}</span>`}
+h+=`<span style="font-weight:700;color:${j.pnl>=0?'var(--bull)':'var(--bear)'}">${j.pnl>=0?"+":""}${j.pnl.toFixed(2)}%</span>`;
+h+=`<span style="font-size:11px;color:${(j.pnlUsdt||0)>=0?'var(--bull)':'var(--bear)'}">${(j.pnlUsdt||0)>=0?"+":""}${(j.pnlUsdt||0).toFixed(2)} USDT</span>`;
+h+=`<span style="font-size:10px;color:var(--tx4);margin-left:auto">${j.opened} → ${j.closed}</span></div>`;
+// Trade details
+h+=`<div style="font-size:10px;color:var(--tx3);margin-top:4px">Entry ${fmtP(j.entry)} → Exit ${fmtP(j.cur||j.entry)} · SL ${fmtP(j.sl||0)} · TP ${fmtP(j.tp||0)} · Margin ${fmtP(j.margin||0,0)} USDT</div>`;
+// Notes from linked analysis
+if(a){
+const comp=a.composite;const hasMIU=a.msgs?.some(m=>["news","macro","flow","chart"].includes(m.ag));
+// Build readable signal summary
+const sigNames={trend:"Trend",momentum:"Mom",volume:"Vol",structure:"Struct",volatility:"Volat",funding:"Fund",imbalance:"Imbal"};
+const sigs=["trend","momentum","volume","structure","volatility","funding","imbalance"].map(id=>{const s=a.tau?.[id];if(!s)return null;return`${sigNames[id]}: ${s.signal}`}).filter(Boolean);
+let note=`<b>TAU:</b> ${comp?.rating||"?"} (${comp?.bullCount||0}B/${comp?.bearCount||0}S) · ${sigs.join(" · ")}`;
+// Chief rec summary
+if(hasMIU){const chiefMsg=a.msgs?.find(m=>m.ag==="chief-rec");
+if(chiefMsg){const dirM=chiefMsg.text.match(/DIRECTION\s*[:：]\s*(LONG|SHORT|WAIT)/i);
+note+=`<br><b>Chief:</b> ${dirM?dirM[1]:"?"}`;
+const rationale=chiefMsg.text.match(/RATIONALE[:\s]*(.*?)(?:\n|$)/i);
+if(rationale)note+=` — ${rationale[1].substring(0,120)}`}}
+h+=`<div style="margin-top:6px;padding:6px 8px;font-size:10px;color:var(--tx2);background:var(--chip);border-radius:var(--rs);line-height:1.6">📝 ${note}</div>`}
+// User note (editable)
+const noteKey=`jnote_${j.id}`;
+const userNote=localStorage.getItem(noteKey)||"";
+h+=`<div style="margin-top:4px"><textarea id="${noteKey}" style="width:100%;min-height:28px;max-height:80px;font-size:10px;padding:4px 6px;border:1px solid var(--bd);border-radius:var(--rs);background:var(--sf);color:var(--tx);resize:vertical" placeholder="Add personal note..." onblur="localStorage.setItem('${noteKey}',this.value)">${userNote}</textarea></div>`;
+h+=`</div>`});
 document.getElementById("v-journal").innerHTML=h}
+
+// Journal AI Agent
+async function runJournalAI(){
+if(!API_KEY){alert("API key needed");return}
+const panel=document.getElementById("journalAIPanel");
+if(!panel)return;
+panel.innerHTML=`<div class="cd" style="margin-bottom:14px"><div class="thinking"><b>Journal Intelligence</b> analyzing your trading history... <span class="thinking-dots"><span></span><span></span><span></span></span></div></div>`;
+
+// Build trade summary for AI
+const trades=journal.map(j=>{
+const a=analyses.find(x=>x.id===j.analysisId);
+const comp=a?.composite;
+return`${j.symbol} ${j.dir.toUpperCase()} ${j.lev}x | Entry:${fmtP(j.entry)} Exit:${fmtP(j.cur||j.entry)} | P&L:${j.pnl>=0?"+":""}${j.pnl.toFixed(2)}% (${(j.pnlUsdt||0)>=0?"+":""}${(j.pnlUsdt||0).toFixed(1)}U) | TAU:${comp?.rating||"?"} ${comp?.bullCount||0}B/${comp?.bearCount||0}S | SL:${fmtP(j.sl||0)} TP:${fmtP(j.tp||0)} | ${j.opened}→${j.closed}`}).join("\n");
+
+const w=journal.filter(j=>j.pnl>0).length;
+const totalUsdt=journal.reduce((s,j)=>s+(j.pnlUsdt||0),0);
+const stats=`Trades:${journal.length} | WR:${(w/journal.length*100).toFixed(0)}% | Total:${totalUsdt.toFixed(1)}U | Avg:${(journal.reduce((s,j)=>s+j.pnl,0)/journal.length).toFixed(2)}%`;
+
+const prompt=`TRADING JOURNAL ANALYSIS
+
+STATS: ${stats}
+
+TRADES:
+${trades}
+
+Provide a professional performance review:
+1. PATTERNS: What patterns do you see? (direction bias, timing, sizing, leverage)
+2. STRENGTHS: What's working well?
+3. WEAKNESSES: What's costing money? Common mistakes?
+4. RISK MANAGEMENT: SL/TP placement quality, R:R ratios
+5. RECOMMENDATIONS: Top 3 specific, actionable improvements
+6. GRADE: Overall trading grade (A-F) with brief justification
+
+Be direct, specific, use the actual trade data. Max 300 words.`;
+
+const r=await callAPI("chief",prompt,"");
+panel.innerHTML=`<div class="cd" style="margin-bottom:14px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:10px"><div class="av" style="background:#6A1B9A;width:32px;height:32px;font-size:11px">JI</div><div><div style="font-size:12px;font-weight:700">Journal Intelligence</div><div style="font-size:10px;color:var(--tx3)">Performance Review · ${journal.length} trades</div></div></div><div style="font-size:11px;color:var(--tx2);line-height:1.7;white-space:pre-wrap">${esc(r)}</div></div>`}
 
 // ═══ NEWS SENTINEL ═══
 let sentAlerts=[],sentSeen=new Set(),sentInterval=null,sentLastScan=0,sentBriefed=new Set();
